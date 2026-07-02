@@ -1,5 +1,5 @@
-import { adminDb, adminAuth } from './_firebaseAdmin';
-import { sendOtpEmail } from './_email';
+import { adminDb, adminAuth } from './_firebaseAdmin.js';
+import { sendOtpEmail } from './_email.js';
 
 function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
