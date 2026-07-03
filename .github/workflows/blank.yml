@@ -6,8 +6,7 @@ on:
       zip_file:
         description: 'Nama file zip yang mau di-extract'
         required: true
-        default: 'eas-education-main.zip'
-
+        default: 'Eas_science-main.zip'
 jobs:
   extract:
     runs-on: ubuntu-latest
