@@ -30,6 +30,8 @@ create table if not exists public.profiles (
   diamonds integer default 0,
   exp integer default 0,
   ip_timeout boolean default false,
+  profession text,
+  profession_changed_at timestamptz,
   created_at timestamptz default now(),
   synced_at timestamptz default now()
 );

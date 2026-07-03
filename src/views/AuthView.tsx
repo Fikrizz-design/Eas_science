@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, query, where, collection } from 'firebase/firestore';
 import { auth, db } from '../db/firebase';
 import { mirror } from '../db/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -277,10 +277,99 @@ function OtpView({ email, uid, onVerified, onCancel }: { email: string; uid: str
   );
 }
 
+function OnboardingView({ generation, onContinue }: { generation: string; onContinue: () => void }) {
+  const [rules, setRules] = useState('');
+  const [groupLink, setGroupLink] = useState('');
+  const [admins, setAdmins] = useState<{ name: string; role: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const configSnap = await getDoc(doc(db, 'settings', 'config'));
+        if (configSnap.exists()) {
+          const data = configSnap.data();
+          setRules(data.communityRules || 'Belum ada aturan komunitas yang ditulis oleh admin.');
+          setGroupLink(generation === 'Gen 2' ? (data.groupLinkGen2 || '') : (data.groupLinkGen1 || ''));
+        }
+        const usersSnap = await getDocs(query(collection(db, 'users'), where('role', 'in', ['owner', 'admin'])));
+        setAdmins(usersSnap.docs.map(d => ({ name: d.data().name, role: d.data().role })).sort((a, b) => (a.role === 'owner' ? -1 : 1)));
+      } catch (err) {
+        console.warn('Failed to load onboarding info', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [generation]);
+
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center bg-brand-950 relative overflow-hidden text-gray-200 p-6 py-12">
+      <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-brand-800/20 via-brand-950 to-brand-950" />
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-2xl relative z-10">
+        <div className="flex flex-col items-start mb-8">
+          <div className="p-3 bg-brand-500/20 rounded-2xl mb-6 inline-flex border border-brand-500/30">
+            <ShieldCheck className="w-8 h-8 text-brand-400" />
+          </div>
+          <h2 className="text-3xl font-display font-bold text-white">Welcome Aboard, Explorer</h2>
+          <p className="text-gray-400 text-sm mt-2">Sebelum masuk ke Command Center, baca dulu aturan komunitas dan info berikut.</p>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 text-brand-400 animate-spin" /></div>
+        ) : (
+          <div className="space-y-5">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-brand-300 mb-3">Aturan Komunitas</h3>
+              <p className="text-sm text-gray-300 whitespace-pre-line leading-relaxed">{rules}</p>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-brand-300 mb-3">Struktur Admin</h3>
+              {admins.length > 0 ? (
+                <ul className="space-y-2">
+                  {admins.map((a, i) => (
+                    <li key={i} className="flex items-center justify-between text-sm">
+                      <span className="text-white">{a.name}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border uppercase tracking-widest ${a.role === 'owner' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}`}>{a.role}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-500">Belum ada data struktur admin.</p>
+              )}
+            </div>
+
+            <div className="bg-brand-500/10 border border-brand-500/30 rounded-2xl p-5">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-brand-300 mb-2">Grup {generation}</h3>
+              {groupLink ? (
+                <a href={groupLink} target="_blank" rel="noreferrer" className="inline-flex items-center text-sm font-bold text-white bg-brand-600 hover:bg-brand-500 px-4 py-2 rounded-xl transition-colors">
+                  Gabung Grup {generation} <ArrowRight className="w-4 h-4 ml-2" />
+                </a>
+              ) : (
+                <p className="text-sm text-gray-400">Link grup untuk {generation} belum diatur oleh admin.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={onContinue}
+          className="w-full mt-8 bg-brand-500 hover:bg-brand-400 text-white font-bold tracking-widest uppercase text-sm py-4 rounded-xl transition-all flex items-center justify-center space-x-2"
+        >
+          <span>Enter Command Center</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </motion.div>
+    </div>
+  );
+}
+
 export function AuthView() {
-  const [step, setStep] = useState<'intro' | 'terms' | 'auth' | 'otp'>('intro');
+  const [step, setStep] = useState<'intro' | 'terms' | 'auth' | 'otp' | 'onboarding'>('intro');
   const [pendingUid, setPendingUid] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
+  const [otpIsRegistration, setOtpIsRegistration] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -294,6 +383,7 @@ export function AuthView() {
   const [reason, setReason] = useState('');
 
   const [generation, setGeneration] = useState('Gen 1');
+  const [profession, setProfession] = useState('Pelajar SMA');
   const [regStatus, setRegStatus] = useState<'open'|'closed'|'loading'>('loading');
   const [regLink, setRegLink] = useState('');
 
@@ -336,6 +426,7 @@ export function AuthView() {
         if (!signedInUser.emailVerified) {
           setPendingUid(signedInUser.uid);
           setPendingEmail(signedInUser.email || email);
+          setOtpIsRegistration(false);
           try {
             await requestOtp(signedInUser.uid, signedInUser.email || email);
           } catch (otpErr: any) {
@@ -367,6 +458,8 @@ export function AuthView() {
           domicile,
           reason,
           generation,
+          profession,
+          professionChangedAt: new Date().toISOString(),
           role: 'member',
           coins: 0,
           diamonds: 0,
@@ -388,6 +481,7 @@ export function AuthView() {
 
         setPendingUid(user.uid);
         setPendingEmail(email);
+        setOtpIsRegistration(true);
         setStep('otp');
       }
     } catch (err: any) {
@@ -401,17 +495,28 @@ export function AuthView() {
     }
   };
 
-  const handleOtpVerified = async () => {
-    setShowBlackHole(true);
-    await auth.currentUser?.reload();
-    await auth.currentUser?.getIdToken(true); // refresh token so email_verified claim updates for security rules
+  const completeLogin = async () => {
     const verifiedUser = auth.currentUser;
     if (verifiedUser) {
       setUser(verifiedUser);
       const docSnap = await getDoc(doc(db, 'users', verifiedUser.uid));
       if (docSnap.exists()) setUserData(docSnap.data());
     }
+  };
+
+  const handleOtpVerified = async () => {
+    setShowBlackHole(true);
+    await auth.currentUser?.reload();
+    await auth.currentUser?.getIdToken(true); // refresh token so email_verified claim updates for security rules
     await new Promise(resolve => setTimeout(resolve, 2500));
+
+    if (otpIsRegistration) {
+      // New accounts see the rules/structure/group-link page before entering the app.
+      setShowBlackHole(false);
+      setStep('onboarding');
+    } else {
+      await completeLogin();
+    }
   };
 
   const handleOtpCancel = async () => {
@@ -451,6 +556,10 @@ export function AuthView() {
         <OtpView email={pendingEmail} uid={pendingUid} onVerified={handleOtpVerified} onCancel={handleOtpCancel} />
       </div>
     );
+  }
+
+  if (step === 'onboarding') {
+    return <OnboardingView generation={generation} onContinue={async () => { await completeLogin(); }} />;
   }
 
   return (
@@ -625,6 +734,22 @@ export function AuthView() {
                         <option value="Gen 2" className="bg-brand-900">Gen 2</option>
                       </select>
                     </div>
+                  </motion.div>
+                  <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }}>
+                    <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Profession / Status</label>
+                    <select
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-400 focus:bg-white/10 transition-all appearance-none"
+                      value={profession} onChange={(e) => setProfession(e.target.value)}
+                    >
+                      <option value="Pelajar SD" className="bg-brand-900">Pelajar SD</option>
+                      <option value="Pelajar SMP" className="bg-brand-900">Pelajar SMP</option>
+                      <option value="Pelajar SMA" className="bg-brand-900">Pelajar SMA</option>
+                      <option value="Mahasiswa" className="bg-brand-900">Mahasiswa</option>
+                      <option value="Guru/Dosen" className="bg-brand-900">Guru/Dosen</option>
+                      <option value="Pekerja" className="bg-brand-900">Pekerja</option>
+                      <option value="Lainnya" className="bg-brand-900">Lainnya</option>
+                    </select>
+                    <p className="text-[10px] text-gray-500 mt-2">Bisa diganti nanti di Profile Settings, tapi dibatasi 1x per 30 hari.</p>
                   </motion.div>
                   <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
                     <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Reason</label>

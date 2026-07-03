@@ -5,7 +5,7 @@
  */
 export async function groqChat(
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
-  options: { json?: boolean; model?: string; temperature?: number } = {}
+  options: { json?: boolean; model?: string; temperature?: number; maxTokens?: number } = {}
 ): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_API_KEY env var is not set.');
@@ -20,6 +20,7 @@ export async function groqChat(
       model: options.model || process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
       messages,
       temperature: options.temperature ?? 0.4,
+      max_tokens: options.maxTokens ?? 1024,
       ...(options.json ? { response_format: { type: 'json_object' } } : {}),
     }),
   });

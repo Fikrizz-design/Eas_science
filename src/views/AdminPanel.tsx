@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../db/firebase';
-import { Shield, UserX, UserCheck, CheckCircle, ImagePlus, Trash2, Settings } from 'lucide-react';
+import { Shield, UserX, UserCheck, CheckCircle, ImagePlus, Trash2, Settings, ShieldPlus, ShieldMinus, ScrollText } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 export function AdminPanel() {
+  const { userData: myUserData } = useStore();
+  const isOwner = myUserData?.role === 'owner';
   const [users, setUsers] = useState<any[]>([]);
   const [library, setLibrary] = useState<any[]>([]);
   const [puzzles, setPuzzles] = useState<any[]>([]);
@@ -16,6 +18,7 @@ export function AdminPanel() {
   const [groupLinkGen1, setGroupLinkGen1] = useState('');
   const [groupLinkGen2, setGroupLinkGen2] = useState('');
   const [tiktokUrl, setTiktokUrl] = useState('');
+  const [communityRules, setCommunityRules] = useState('');
 
   useEffect(() => {
     
@@ -30,6 +33,7 @@ export function AdminPanel() {
           setGroupLinkGen1(data.groupLinkGen1 || '');
           setGroupLinkGen2(data.groupLinkGen2 || '');
           setTiktokUrl(data.tiktokUrl || '');
+          setCommunityRules(data.communityRules || '');
         }
       } catch (err) {
         console.warn('Failed to fetch config', err);
@@ -127,7 +131,8 @@ export function AdminPanel() {
         registrationLink: regLink,
         groupLinkGen1: groupLinkGen1,
         groupLinkGen2: groupLinkGen2,
-        tiktokUrl: tiktokUrl
+        tiktokUrl: tiktokUrl,
+        communityRules: communityRules
       }, { merge: true });
       alert('Settings updated!');
     } catch (err) {
@@ -158,6 +163,17 @@ export function AdminPanel() {
       alert('User warned.');
     } catch (err) {
       alert('Failed to warn user.');
+    }
+  };
+
+  const changeRole = async (userId: string, newRole: 'member' | 'admin') => {
+    if (!isOwner) return;
+    if (!confirm(`Ubah role explorer ini menjadi "${newRole}"?`)) return;
+    try {
+      await updateDoc(doc(db, 'users', userId), { role: newRole });
+    } catch (err) {
+      console.error(err);
+      alert('Failed to change role. Permissions might be denied.');
     }
   };
 
@@ -234,6 +250,18 @@ export function AdminPanel() {
               <p className="text-xs text-gray-500 mt-2">Pushes a 10s priority broadcast to all active explorers.</p>
             </div>
             
+            <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+              <label className="block text-xs font-bold uppercase tracking-widest text-gray-400 mb-2 flex items-center"><ScrollText className="w-4 h-4 mr-2 text-brand-400" /> Community Rules & Structure</label>
+              <textarea
+                rows={6}
+                placeholder="Tulis aturan komunitas E.A.S di sini. Teks ini akan ditampilkan ke explorer baru setelah verifikasi email."
+                value={communityRules}
+                onChange={(e) => setCommunityRules(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors resize-none"
+              />
+              <p className="text-xs text-gray-500 mt-2">Ditampilkan di halaman onboarding setelah registrasi, bersama daftar admin & link grup sesuai generasi.</p>
+            </div>
+
             <button onClick={saveSettings} className="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold uppercase tracking-widest text-sm py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)]">
               Commit Configuration
             </button>
@@ -305,10 +333,28 @@ export function AdminPanel() {
                     <h3 className="font-bold text-lg text-white flex items-center space-x-2">
                       <span>{u.name}</span>
                       {u.generation && <span className="text-[10px] bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded-full border border-brand-500/30 uppercase tracking-widest">{u.generation}</span>}
+                      {u.role && u.role !== 'member' && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border uppercase tracking-widest ${u.role === 'owner' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}`}>{u.role}</span>
+                      )}
                     </h3>
                     <p className="text-xs text-gray-400 mt-1">{u.email}</p>
+                    {u.profession && <p className="text-xs text-brand-400 mt-1">{u.profession}</p>}
                   </div>
                 </div>
+
+                {isOwner && u.role !== 'owner' && (
+                  <div className="mb-4">
+                    {u.role === 'admin' ? (
+                      <button onClick={() => changeRole(u.id, 'member')} className="w-full flex items-center justify-center space-x-2 text-xs font-bold uppercase tracking-widest bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 py-2 rounded-xl transition-colors">
+                        <ShieldMinus className="w-4 h-4" /> <span>Demote to Member</span>
+                      </button>
+                    ) : (
+                      <button onClick={() => changeRole(u.id, 'admin')} className="w-full flex items-center justify-center space-x-2 text-xs font-bold uppercase tracking-widest bg-brand-500/10 hover:bg-brand-500/20 text-brand-300 border border-brand-500/20 py-2 rounded-xl transition-colors">
+                        <ShieldPlus className="w-4 h-4" /> <span>Promote to Admin</span>
+                      </button>
+                    )}
+                  </div>
+                )}
                 
                 <div className="flex flex-wrap gap-2 mb-4">
                    {u.isBlacklisted && <p className="text-[10px] text-red-400 bg-red-500/10 px-2 py-1 rounded">Reason: {u.blacklistReason}</p>}

@@ -22,6 +22,10 @@ service cloud.firestore {
       return isVerified() && myRole() in ['admin', 'owner'];
     }
 
+    function isOwnerRole() {
+      return isVerified() && myRole() == 'owner';
+    }
+
     // ---- users: name, role, coins (funding), diamonds, exp, etc ----
     match /users/{uid} {
       allow read: if isVerified();
@@ -32,7 +36,8 @@ service cloud.firestore {
                     && request.resource.data.coins == 0
                     && request.resource.data.diamonds == 0
                     && request.resource.data.exp == 0;
-      allow update: if isStaff()
+      allow update: if isOwnerRole()
+                    || (isStaff() && request.resource.data.role == resource.data.role) // admins moderate but can't change roles
                     || (isOwnerOf(uid)
                         && request.resource.data.role == resource.data.role
                         && request.resource.data.diamonds <= resource.data.diamonds + 0
@@ -40,7 +45,7 @@ service cloud.firestore {
                         // but never let a user hand themselves free funding/exp/diamonds:
                         && request.resource.data.coins <= resource.data.coins
                         && request.resource.data.exp == resource.data.exp);
-      allow delete: if isStaff();
+      allow delete: if isOwnerRole();
     }
 
     // ---- library: journals/photos/audio metadata (files live in Supabase Storage) ----

@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Star, Target, Crown, Image as ImageIcon, Palette, Settings, X, Gamepad2, Sun, Map, Globe, CloudLightning, Rocket, Brain, MessageSquare, Book, Shield, ExternalLink, Search, Tv } from 'lucide-react';
+import { Trophy, Star, Target, Crown, Image as ImageIcon, Palette, Settings, X, Gamepad2, Sun, Map, Globe, CloudLightning, Rocket, Brain, MessageSquare, Book, Shield, ExternalLink, Search, Tv, Briefcase, Users, Clock, Upload } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../db/firebase';
+import { uploadLibraryFile } from '../db/supabase';
 import { Link, useNavigate } from 'react-router-dom';
+
+const PROFESSIONS = ['Pelajar SD', 'Pelajar SMP', 'Pelajar SMA', 'Mahasiswa', 'Guru/Dosen', 'Pekerja', 'Lainnya'];
 
 const navItems = [
   { path: '/arcade', name: 'Arcade', icon: Gamepad2, color: 'text-purple-400', bg: 'bg-purple-900/20' },
@@ -105,6 +108,15 @@ export function Dashboard() {
   const [showTiktok, setShowTiktok] = useState(false);
   
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingFrame, setUploadingFrame] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const frameInputRef = useRef<HTMLInputElement>(null);
+
+  const [groupLinkGen1, setGroupLinkGen1] = useState('');
+  const [groupLinkGen2, setGroupLinkGen2] = useState('');
+  const [showProfessionEdit, setShowProfessionEdit] = useState(false);
+  const [newProfession, setNewProfession] = useState('');
 
   useEffect(() => {
     
@@ -115,6 +127,10 @@ export function Dashboard() {
           setTiktokUrl(snap.data().tiktokUrl);
           setShowTiktok(true);
           setTimeout(() => setShowTiktok(false), 10000);
+        }
+        if (snap.exists()) {
+          setGroupLinkGen1(snap.data().groupLinkGen1 || '');
+          setGroupLinkGen2(snap.data().groupLinkGen2 || '');
         }
       } catch (err) {}
     };
@@ -138,15 +154,18 @@ export function Dashboard() {
 
   const currentBg = BACKGROUNDS.find(b => b.id === userData?.currentBackground)?.url || '';
   
-  const handleUpdateAvatar = async () => {
-    if (!user) return;
-    const url = prompt('Enter image URL for Avatar:');
-    if (!url) return;
+  const handleAvatarFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploadingAvatar(true);
     try {
+      const url = await uploadLibraryFile(file, 'avatars');
       await updateDoc(doc(db, 'users', user.uid), { avatarUrl: url });
-      alert('Avatar updated!');
     } catch (e) {
-      alert('Failed to update avatar.');
+      alert('Failed to upload avatar.');
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
     }
   };
 
@@ -235,27 +254,56 @@ export function Dashboard() {
     
   };
 
-  const handleCustomFrame = async () => {
+  const handleCustomFrameClick = () => {
     if (!user || !userData) return;
     if ((userData.diamonds || 0) < 200000 && userData.role !== 'owner') {
       alert('You need 200,000 Diamonds to unlock Custom Frame! Or pay Rp 2,000 to owner to unlock Exclusive Role.');
       return;
     }
-    const url = prompt('Enter your custom transparent GIF URL (Max 5MB):');
-    if (!url) return;
-    
-    let cost = userData.role === 'owner' ? 0 : 200000;
-    
-    const updatedData = {
-      ...userData,
-      diamonds: userData.diamonds - cost,
-      customFrame: url,
-      currentFrame: 'frame_custom'
-    };
-    
-      await updateDoc(doc(db, 'users', user.uid), updatedData);
-    
-    alert('Custom frame unlocked and equipped!');
+    frameInputRef.current?.click();
+  };
+
+  const handleCustomFrameFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !userData) return;
+
+    setUploadingFrame(true);
+    try {
+      const url = await uploadLibraryFile(file, 'frames');
+      const cost = userData.role === 'owner' ? 0 : 200000;
+      await updateDoc(doc(db, 'users', user.uid), {
+        diamonds: userData.diamonds - cost,
+        customFrame: url,
+        currentFrame: 'frame_custom'
+      });
+      alert('Custom frame unlocked and equipped!');
+    } catch (e) {
+      alert('Failed to upload custom frame.');
+    } finally {
+      setUploadingFrame(false);
+      if (frameInputRef.current) frameInputRef.current.value = '';
+    }
+  };
+
+  const professionCooldownDaysLeft = (() => {
+    if (!userData?.professionChangedAt) return 0;
+    const last = new Date(userData.professionChangedAt).getTime();
+    const daysPassed = (Date.now() - last) / (1000 * 60 * 60 * 24);
+    return Math.max(0, Math.ceil(30 - daysPassed));
+  })();
+
+  const changeProfession = async () => {
+    if (!user || !userData || !newProfession) return;
+    if (professionCooldownDaysLeft > 0) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        profession: newProfession,
+        professionChangedAt: new Date().toISOString()
+      });
+      setShowProfessionEdit(false);
+    } catch (e) {
+      alert('Failed to update profession.');
+    }
   };
 
   return (
@@ -313,9 +361,14 @@ export function Dashboard() {
       {/* Top Bar / Profile */}
       <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <header className="flex items-center space-x-6">
-          <div className="relative group cursor-pointer" onClick={handleUpdateAvatar}>
+          <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
+            <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileSelected} />
             <div className="w-20 h-20 rounded-full border-2 border-brand-500 overflow-hidden bg-brand-900 shadow-[0_0_20px_rgba(139,92,246,0.3)] relative z-10">
-              {userData?.avatarUrl ? (
+              {uploadingAvatar ? (
+                <div className="w-full h-full flex items-center justify-center">
+                  <motion.div className="w-6 h-6 border-2 border-brand-400 border-t-transparent rounded-full" animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} />
+                </div>
+              ) : userData?.avatarUrl ? (
                 <img src={userData.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-3xl font-display font-bold text-brand-300">
@@ -507,6 +560,69 @@ export function Dashboard() {
                   </motion.button>
                 </div>
 
+                {/* Profession */}
+                <div>
+                  <h3 className="font-bold text-lg mb-4 uppercase tracking-widest text-brand-300 flex items-center"><Briefcase className="w-5 h-5 mr-2" /> Profession</h3>
+                  <div className="bg-brand-900/40 p-5 rounded-2xl border border-white/10">
+                    {!showProfessionEdit ? (
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-white font-bold">{userData?.profession || 'Belum diatur'}</p>
+                          {professionCooldownDaysLeft > 0 ? (
+                            <p className="text-xs text-gray-400 mt-1 flex items-center"><Clock className="w-3 h-3 mr-1" /> Bisa diganti lagi dalam {professionCooldownDaysLeft} hari</p>
+                          ) : (
+                            <p className="text-xs text-gray-500 mt-1">Bisa diganti sekarang</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => { setNewProfession(userData?.profession || PROFESSIONS[0]); setShowProfessionEdit(true); }}
+                          disabled={professionCooldownDaysLeft > 0}
+                          className="bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-xl transition-colors shrink-0"
+                        >
+                          Ganti Profesi
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                        <select
+                          value={newProfession}
+                          onChange={(e) => setNewProfession(e.target.value)}
+                          className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500 appearance-none"
+                        >
+                          {PROFESSIONS.map(p => <option key={p} value={p} className="bg-brand-900">{p}</option>)}
+                        </select>
+                        <div className="flex gap-2">
+                          <button onClick={changeProfession} className="flex-1 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold uppercase tracking-widest px-4 py-3 rounded-xl transition-colors">Simpan</button>
+                          <button onClick={() => setShowProfessionEdit(false)} className="bg-white/5 hover:bg-white/10 text-white text-xs font-bold uppercase tracking-widest px-4 py-3 rounded-xl transition-colors">Batal</button>
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-gray-500 mt-3">Profesi hanya bisa diganti 1x setiap 30 hari.</p>
+                  </div>
+                </div>
+
+                {/* Community Group */}
+                <div>
+                  <h3 className="font-bold text-lg mb-4 uppercase tracking-widest text-brand-300 flex items-center"><Users className="w-5 h-5 mr-2" /> Community Group</h3>
+                  <div className="bg-brand-900/40 p-5 rounded-2xl border border-white/10 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-white font-bold">{userData?.generation || 'Gen 1'}</p>
+                      <p className="text-xs text-gray-400 mt-1">Link grup komunitas sesuai generasimu.</p>
+                    </div>
+                    {(userData?.generation === 'Gen 2' ? groupLinkGen2 : groupLinkGen1) ? (
+                      <a
+                        href={userData?.generation === 'Gen 2' ? groupLinkGen2 : groupLinkGen1}
+                        target="_blank" rel="noreferrer"
+                        className="bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-xl transition-colors shrink-0"
+                      >
+                        Buka Grup
+                      </a>
+                    ) : (
+                      <span className="text-xs text-gray-500 shrink-0">Belum diatur admin</span>
+                    )}
+                  </div>
+                </div>
+
                 {/* Avatar Frames */}
                 <div>
                   <h3 className="font-bold text-lg mb-4 uppercase tracking-widest text-brand-300">Avatar Frames</h3>
@@ -549,8 +665,10 @@ export function Dashboard() {
                         <p className="text-xs text-gray-400">Unlock your own transparent GIF frame.</p>
                         <p className="text-[10px] text-pink-400 mt-1 uppercase tracking-widest font-mono">Cost: 200,000 Diamonds OR Exclusive Role (Rp 2k)</p>
                       </div>
-                      <button onClick={handleCustomFrame} className="bg-brand-600 hover:bg-brand-500 text-white font-bold uppercase tracking-widest text-xs px-4 py-2 rounded-xl transition-colors shrink-0 ml-4">
-                        {userData?.currentFrame === 'frame_custom' ? 'Change Custom Frame' : 'Unlock Custom'}
+                      <input ref={frameInputRef} type="file" accept="image/gif,image/png,image/webp" className="hidden" onChange={handleCustomFrameFileSelected} />
+                      <button onClick={handleCustomFrameClick} disabled={uploadingFrame} className="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white font-bold uppercase tracking-widest text-xs px-4 py-2 rounded-xl transition-colors shrink-0 ml-4 flex items-center space-x-2">
+                        {uploadingFrame && <motion.div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full" animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} />}
+                        <span>{uploadingFrame ? 'Uploading...' : userData?.currentFrame === 'frame_custom' ? 'Change Custom Frame' : 'Unlock Custom'}</span>
                       </button>
                     </div>
                     
