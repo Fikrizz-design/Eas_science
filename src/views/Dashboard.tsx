@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Star, Target, Crown, Image as ImageIcon, Palette, Settings, X, Gamepad2, Sun, Map, Globe, CloudLightning, Rocket, Brain, MessageSquare, Book, Shield, ExternalLink, Search, Tv, Briefcase, Users, Clock, Upload, CalendarDays } from 'lucide-react';
+import { Trophy, Star, Target, Crown, Image as ImageIcon, Palette, Settings, X, Gamepad2, Sun, Map, Globe, CloudLightning, Rocket, Brain, MessageSquare, Book, Shield, ExternalLink, Search, Tv, Briefcase, Users, Clock, Upload, CalendarDays, Terminal } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../db/firebase';
 import { uploadLibraryFile } from '../db/supabase';
@@ -186,7 +186,8 @@ export function Dashboard() {
   }, []);
 
   const isAdmin = userData?.role === 'admin';
-  const isOwner = userData?.role === 'owner';
+  const isOwner = userData?.role === 'owner' || userData?.role === 'developer';
+  const isDeveloper = userData?.role === 'developer';
   const hasExclusive = isOwner || userData?.currentFrame === 'frame_custom';
   
   const baseNavItems = [...navItems];
@@ -194,9 +195,13 @@ export function Dashboard() {
     baseNavItems.push({ path: '/exclusive', name: 'Black Market', icon: Crown, color: 'text-yellow-400', bg: 'bg-yellow-900/20' });
   }
 
-  const allNavItems = isAdmin || isOwner
-    ? [...baseNavItems, { path: '/admin', name: 'Admin Panel', icon: Shield, color: 'text-red-400', bg: 'bg-red-900/20' }] 
-    : baseNavItems;
+  let allNavItems = baseNavItems;
+  if (isAdmin || isOwner) {
+    allNavItems = [...allNavItems, { path: '/admin', name: 'Admin Panel', icon: Shield, color: 'text-red-400', bg: 'bg-red-900/20' }];
+  }
+  if (isDeveloper) {
+    allNavItems = [...allNavItems, { path: '/dev', name: 'Developer Panel', icon: Terminal, color: 'text-signal-cyan', bg: 'bg-cyan-900/20' }];
+  }
     
   const filteredNavItems = allNavItems.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -333,7 +338,7 @@ export function Dashboard() {
     }
   };
 
-  const isStaffMember = userData?.role === 'admin' || userData?.role === 'owner';
+  const isStaffMember = userData?.role === 'admin' || userData?.role === 'owner' || userData?.role === 'developer';
 
   const professionCooldownDaysLeft = (() => {
     if (isStaffMember) return 0; // staff can set a custom title anytime

@@ -170,3 +170,27 @@ serverless functions together, using the same env vars from `.env`/`vercel env p
   just silently skips those fields).
 - Vercel Cron Jobs require at least the Hobby plan; check Vercel's current limits if the
   schedule in `vercel.json` doesn't trigger as expected.
+
+## Developer role & Developer Panel
+
+There's now a role tier above `owner`: **`developer`**. It's meant for you (the person
+who actually built and maintains the site) to monitor the whole app without needing
+your friend (the community owner) to understand any of the technical side.
+
+- **How to grant it:** exactly like bootstrapping the first `owner` — manually in
+  Firestore Console, `users/{uid}` → set `role` to `developer`. There is no in-app way
+  to grant this role (not even the owner's promote/demote buttons offer it) — that's
+  intentional, so it stays a role only you control.
+- **What it can do:** everything `owner` can do (Firestore rules treat `developer` as a
+  superset of `owner`), plus its own page at **`/dev`** — a "Developer Panel" showing:
+  - Content counts (users, library items, debates, posts, phenomena)
+  - Role and generation breakdown of all users
+  - Which server env vars are actually configured (green/red checklist) — so you can
+    tell at a glance if `GROQ_API_KEY`, `RESEND_API_KEY`, etc. are missing without
+    digging through Vercel's dashboard
+  - Whether today's daily quiz has been generated yet, and the latest SEO generation
+    timestamp
+  - Recent client-side errors, auto-reported from anywhere in the app (throttled to 5
+    per browser session so a crash loop can't spam Firestore)
+- A "Developer Panel" nav card only appears on the Dashboard for users with this role;
+  everyone else never sees it exists.

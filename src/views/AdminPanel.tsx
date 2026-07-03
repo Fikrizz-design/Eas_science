@@ -6,7 +6,7 @@ import { useStore } from '../store/useStore';
 
 export function AdminPanel() {
   const { userData: myUserData } = useStore();
-  const isOwner = myUserData?.role === 'owner';
+  const isOwner = myUserData?.role === 'owner' || myUserData?.role === 'developer';
   const [users, setUsers] = useState<any[]>([]);
   const [library, setLibrary] = useState<any[]>([]);
   const [puzzles, setPuzzles] = useState<any[]>([]);
@@ -482,7 +482,7 @@ export function AdminPanel() {
                       <span>{u.name}</span>
                       {u.generation && <span className="text-[10px] bg-brand-500/20 text-brand-300 px-2 py-0.5 rounded-full border border-brand-500/30 uppercase tracking-widest">{u.generation}</span>}
                       {u.role && u.role !== 'member' && (
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full border uppercase tracking-widest ${u.role === 'owner' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}`}>{u.role}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border uppercase tracking-widest ${u.role === 'developer' ? 'bg-signal-cyan/20 text-signal-cyan border-signal-cyan/30' : u.role === 'owner' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}`}>{u.role}</span>
                       )}
                     </h3>
                     <p className="text-xs text-gray-400 mt-1">{u.email}</p>
@@ -490,7 +490,7 @@ export function AdminPanel() {
                   </div>
                 </div>
 
-                {isOwner && u.role !== 'owner' && (
+                {isOwner && u.role !== 'owner' && u.role !== 'developer' && (
                   <div className="mb-4">
                     {u.role === 'admin' ? (
                       <button onClick={() => changeRole(u.id, 'member')} className="w-full flex items-center justify-center space-x-2 text-xs font-bold uppercase tracking-widest bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 py-2 rounded-xl transition-colors">

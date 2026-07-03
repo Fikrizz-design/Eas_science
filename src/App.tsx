@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './db/firebase';
 import { useStore } from './store/useStore';
 import { AuthView } from './views/AuthView';
@@ -24,6 +24,7 @@ import { Missions } from './views/Missions';
 import { DebateRoom } from './views/DebateRoom';
 import { BlackMarket } from './views/BlackMarket';
 import { PhenomenaCalendar } from './views/PhenomenaCalendar';
+import { DeveloperPanel } from './views/DeveloperPanel';
 import { Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -91,6 +92,36 @@ function PendingApprovalView() {
 export default function App() {
   const { user, setUser, setUserData } = useStore();
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Best-effort client error reporting for the Developer Panel. Throttled
+    // to a handful per session so a crash loop can't spam Firestore.
+    let logged = 0;
+    const MAX_LOGS_PER_SESSION = 5;
+
+    const report = (message: string, stack?: string) => {
+      if (!auth.currentUser || logged >= MAX_LOGS_PER_SESSION) return;
+      logged++;
+      addDoc(collection(db, 'errorLogs'), {
+        message: String(message).slice(0, 500),
+        stack: stack ? String(stack).slice(0, 1500) : null,
+        path: window.location.pathname,
+        userId: auth.currentUser.uid,
+        userAgent: navigator.userAgent,
+        createdAt: serverTimestamp(),
+      }).catch(() => {});
+    };
+
+    const onError = (e: ErrorEvent) => report(e.message, e.error?.stack);
+    const onRejection = (e: PromiseRejectionEvent) => report(String(e.reason?.message || e.reason), e.reason?.stack);
+
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  }, []);
 
   useEffect(() => {
     const applySeo = async () => {
@@ -317,6 +348,9 @@ function AnimatedRoutes() {
             } />
             <Route path="/admin" element={
               <PageTransition><AdminPanel /></PageTransition>
+            } />
+            <Route path="/dev" element={
+              <PageTransition><DeveloperPanel /></PageTransition>
             } />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

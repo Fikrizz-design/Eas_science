@@ -19,11 +19,17 @@ service cloud.firestore {
     }
 
     function isStaff() {
-      return isVerified() && myRole() in ['admin', 'owner'];
+      return isVerified() && myRole() in ['admin', 'owner', 'developer'];
     }
 
     function isOwnerRole() {
-      return isVerified() && myRole() == 'owner';
+      // "developer" is the top tier (site maintainer) and inherits every
+      // owner-level permission, plus its own monitoring panel below.
+      return isVerified() && myRole() in ['owner', 'developer'];
+    }
+
+    function isDeveloper() {
+      return isVerified() && myRole() == 'developer';
     }
 
     // ---- users: name, role, coins (funding), diamonds, exp, etc ----
@@ -91,6 +97,13 @@ service cloud.firestore {
     match /seo/{docId} {
       allow read: if true; // needed for public meta tags before login
       allow write: if false;
+    }
+
+    // ---- client/server error reports, for the Developer Panel ----
+    match /errorLogs/{logId} {
+      allow create: if isVerified();
+      allow read, delete: if isDeveloper();
+      allow update: if false;
     }
 
     // ---- global app settings (registration open/closed, group links, etc) ----
