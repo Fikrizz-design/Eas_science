@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../db/firebase';
-import { Shield, UserX, UserCheck, CheckCircle, ImagePlus, Trash2, Settings, ShieldPlus, ShieldMinus, ScrollText } from 'lucide-react';
+import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, getDoc, setDoc, orderBy } from 'firebase/firestore';
+import { db, auth } from '../db/firebase';
+import { Shield, UserX, UserCheck, CheckCircle, ImagePlus, Trash2, Settings, ShieldPlus, ShieldMinus, ScrollText, CalendarDays, Sparkles, RefreshCw } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 export function AdminPanel() {
@@ -12,6 +12,8 @@ export function AdminPanel() {
   const [puzzles, setPuzzles] = useState<any[]>([]);
   const [newPuzzleUrl, setNewPuzzleUrl] = useState('');
   const [genFilter, setGenFilter] = useState('All');
+  const [seoConfig, setSeoConfig] = useState<any>(null);
+  const [regeneratingSeo, setRegeneratingSeo] = useState(false);
   
   const [isRegOpen, setIsRegOpen] = useState(true);
   const [regLink, setRegLink] = useState('');
@@ -19,6 +21,8 @@ export function AdminPanel() {
   const [groupLinkGen2, setGroupLinkGen2] = useState('');
   const [tiktokUrl, setTiktokUrl] = useState('');
   const [communityRules, setCommunityRules] = useState('');
+  const [phenomena, setPhenomena] = useState<any[]>([]);
+  const [newPhenomenon, setNewPhenomenon] = useState({ title: '', date: '', description: '', imageUrl: '' });
 
   useEffect(() => {
     
@@ -56,10 +60,19 @@ export function AdminPanel() {
     }, (error) => {
       console.warn("Firestore error in AdminPanel (puzzles):", error);
     });
+    const unsubPhenomena = onSnapshot(query(collection(db, 'phenomena'), orderBy('date', 'asc')), (snap) => {
+      setPhenomena(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.warn("Firestore error in AdminPanel (phenomena):", error);
+    });
+    getDoc(doc(db, 'seo', 'config')).then(snap => {
+      if (snap.exists()) setSeoConfig(snap.data());
+    }).catch(() => {});
     return () => {
       if (unsubUsers) unsubUsers();
       if (unsubLibrary) unsubLibrary();
       if (unsubPuzzles) unsubPuzzles();
+      if (unsubPhenomena) unsubPhenomena();
     };
   }, []);
 
@@ -90,6 +103,52 @@ export function AdminPanel() {
     } catch (err: any) {
       console.error(err);
       alert('Failed to verify item. Permissions might be denied.');
+    }
+  };
+
+  const regenerateSeo = async () => {
+    if (!auth.currentUser) return;
+    setRegeneratingSeo(true);
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/generate-seo', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to regenerate SEO');
+      setSeoConfig(data);
+    } catch (err: any) {
+      alert(err.message || 'Failed to regenerate SEO.');
+    } finally {
+      setRegeneratingSeo(false);
+    }
+  };
+
+  const addPhenomenon = async () => {
+    if (!newPhenomenon.title || !newPhenomenon.date) {
+      alert('Judul dan tanggal wajib diisi.');
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'phenomena'), {
+        ...newPhenomenon,
+        source: 'admin',
+        createdAt: new Date().toISOString()
+      });
+      setNewPhenomenon({ title: '', date: '', description: '', imageUrl: '' });
+    } catch (err) {
+      console.error(err);
+      alert('Failed to add phenomenon.');
+    }
+  };
+
+  const deletePhenomenon = async (id: string) => {
+    if (!confirm('Hapus fenomena ini dari kalender?')) return;
+    try {
+      await deleteDoc(doc(db, 'phenomena', id));
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -305,6 +364,95 @@ export function AdminPanel() {
               </div>
             )}
           </div>
+        </section>
+
+        <section className="bg-brand-900/40 p-6 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-xl flex flex-col lg:col-span-2">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold flex items-center text-white"><CalendarDays className="w-5 h-5 mr-3 text-brand-400" /> Phenomena Calendar</h2>
+            <span className="text-xs text-gray-500">NASA data ditambahkan otomatis, ini untuk entri manual</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            <input
+              type="text" placeholder="Judul fenomena"
+              value={newPhenomenon.title}
+              onChange={(e) => setNewPhenomenon({ ...newPhenomenon, title: e.target.value })}
+              className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors"
+            />
+            <input
+              type="date"
+              value={newPhenomenon.date}
+              onChange={(e) => setNewPhenomenon({ ...newPhenomenon, date: e.target.value })}
+              className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors"
+            />
+            <input
+              type="text" placeholder="URL gambar (opsional)"
+              value={newPhenomenon.imageUrl}
+              onChange={(e) => setNewPhenomenon({ ...newPhenomenon, imageUrl: e.target.value })}
+              className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors sm:col-span-2"
+            />
+            <textarea
+              placeholder="Deskripsi singkat"
+              rows={2}
+              value={newPhenomenon.description}
+              onChange={(e) => setNewPhenomenon({ ...newPhenomenon, description: e.target.value })}
+              className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors resize-none sm:col-span-2"
+            />
+          </div>
+          <button onClick={addPhenomenon} className="bg-white/10 hover:bg-white/20 px-6 py-3 rounded-xl text-sm font-bold text-white transition-colors mb-6 self-start">
+            Add to Calendar
+          </button>
+
+          <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+            {phenomena.length === 0 && <p className="text-gray-500 text-sm text-center py-4">Belum ada entri manual.</p>}
+            {phenomena.map(p => (
+              <div key={p.id} className="flex items-center justify-between bg-black/20 rounded-xl px-4 py-3 border border-white/5">
+                <div>
+                  <p className="text-sm font-bold text-white">{p.title}</p>
+                  <p className="text-xs text-gray-500">{p.date}</p>
+                </div>
+                <button onClick={() => deletePhenomenon(p.id)} className="text-red-400 hover:text-red-300 p-2">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="bg-brand-900/40 p-6 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-xl flex flex-col lg:col-span-2">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold flex items-center text-white"><Sparkles className="w-5 h-5 mr-3 text-brand-400" /> Auto SEO (Groq)</h2>
+            <button
+              onClick={regenerateSeo}
+              disabled={regeneratingSeo}
+              className="flex items-center space-x-2 text-xs text-brand-300 hover:text-white bg-brand-500/10 hover:bg-brand-500/30 px-3 py-1.5 rounded-lg border border-brand-500/30 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${regeneratingSeo ? 'animate-spin' : ''}`} />
+              <span>{regeneratingSeo ? 'Generating...' : 'Regenerate Now'}</span>
+            </button>
+          </div>
+          {seoConfig ? (
+            <div className="bg-black/20 p-4 rounded-2xl border border-white/5 space-y-2">
+              <p className="text-xs font-mono uppercase tracking-widest text-gray-500">Title</p>
+              <p className="text-sm text-white font-bold">{seoConfig.title}</p>
+              <p className="text-xs font-mono uppercase tracking-widest text-gray-500 pt-2">Description</p>
+              <p className="text-sm text-gray-300">{seoConfig.description}</p>
+              {seoConfig.keywords?.length > 0 && (
+                <>
+                  <p className="text-xs font-mono uppercase tracking-widest text-gray-500 pt-2">Keywords</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {seoConfig.keywords.map((k: string, i: number) => (
+                      <span key={i} className="text-[10px] bg-white/5 text-gray-400 px-2 py-1 rounded-full border border-white/5">{k}</span>
+                    ))}
+                  </div>
+                </>
+              )}
+              {seoConfig.generatedAt && <p className="text-[10px] text-gray-600 pt-2">Terakhir dibuat: {new Date(seoConfig.generatedAt).toLocaleString('id-ID')}</p>}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm text-center py-6">Belum ada metadata SEO. Klik "Regenerate Now" atau tunggu jadwal otomatis (4x/minggu).</p>
+          )}
+          <p className="text-[10px] text-gray-500 mt-3">Groq membuat ulang title, meta description, dan keywords otomatis 4x seminggu lewat Vercel Cron, selain soal kuis harian.</p>
         </section>
       </div>
 

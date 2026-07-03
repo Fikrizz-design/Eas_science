@@ -81,6 +81,18 @@ service cloud.firestore {
       allow write: if isStaff();
     }
 
+    // ---- astronomy phenomena calendar (admin-curated + NASA-sourced) ----
+    match /phenomena/{eventId} {
+      allow read: if isVerified();
+      allow write: if isStaff();
+    }
+
+    // ---- auto-generated SEO metadata (written server-side only) ----
+    match /seo/{docId} {
+      allow read: if true; // needed for public meta tags before login
+      allow write: if false;
+    }
+
     // ---- global app settings (registration open/closed, group links, etc) ----
     match /settings/{docId} {
       allow read: if true; // needed on the auth screen before login

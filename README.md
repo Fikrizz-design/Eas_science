@@ -127,3 +127,46 @@ serverless functions together, using the same env vars from `.env`/`vercel env p
   anything (`allow read, write: if true`). New rules require email verification and
   prevent users from self-granting role/funding/diamonds/exp.
 - **Supabase added** for file storage and a data/chat mirror (see `supabase-schema.sql`).
+
+## What's new in this round
+
+- **Dashboard redesign** — activated the "Mission HUD" signature system that was already
+  defined in `index.css` but unused (clipped panel corners, cyan corner brackets,
+  starfield drift, scanline hover sweep). Added a live WIB mission clock, animated
+  count-up stat readouts, a shimmering gradient headline, and restyled the module grid.
+- **File uploads instead of URL prompts** — avatar and custom frame now use a real file
+  picker uploading to Supabase Storage, not a `prompt()` asking for a link.
+- **Profession field** at registration with a 30-day change cooldown; admins/owners get
+  a free-text custom title instead (shown in the onboarding Admin Structure list and
+  AdminPanel).
+- **Post-registration onboarding page** — after OTP verification, new users see
+  community rules (admin-editable), the current admin structure, and their generation's
+  group link before entering the app.
+- **Owner-only promote/demote** — owner can turn a member into an admin (or back) from
+  AdminPanel; Firestore rules now restrict role changes to the `owner` role specifically
+  (regular admins can still moderate other fields, just not roles).
+- **Daily quiz rebuilt** — 20 Indonesian-language questions, regenerated once per day
+  (Asia/Jakarta) via Groq and cached in Firestore (`dailyQuiz/{date}`) so every user gets
+  the same set and the API isn't hit per-user.
+- **Phenomena Calendar** (`/phenomena`) — merges NASA data (Astronomy Picture of the Day
+  + near-Earth asteroid approaches via `/api/nasa-phenomena`, cached daily) with entries
+  admins add manually in AdminPanel.
+- **Auto-generated SEO** — `/api/generate-seo` uses Groq to refresh the site's title,
+  meta description, and keywords, written to Firestore `seo/config` and applied to
+  `document.title`/meta tags on load. Runs automatically 4x/week via Vercel Cron
+  (see `vercel.json`), or on demand from AdminPanel's "Regenerate Now" button.
+
+### New env vars for this round
+- `NASA_API_KEY` — optional, falls back to NASA's public `DEMO_KEY` (rate-limited but
+  fine since results are cached once per day)
+- `CRON_SECRET` — any random string; Vercel Cron sends it automatically to authorize
+  `/api/generate-seo`
+
+### Setup notes
+- Re-paste `firestore.rules` into Firebase Console (added rules for `phenomena` and
+  `seo`, and tightened `users` so only `owner` can change roles).
+- Re-run `supabase-schema.sql` if you want the new `profession`/`profession_changed_at`
+  columns on the `profiles` mirror table (optional — the app works without it, mirroring
+  just silently skips those fields).
+- Vercel Cron Jobs require at least the Hobby plan; check Vercel's current limits if the
+  schedule in `vercel.json` doesn't trigger as expected.

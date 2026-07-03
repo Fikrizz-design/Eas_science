@@ -23,6 +23,7 @@ import { SpaceWeather } from './views/SpaceWeather';
 import { Missions } from './views/Missions';
 import { DebateRoom } from './views/DebateRoom';
 import { BlackMarket } from './views/BlackMarket';
+import { PhenomenaCalendar } from './views/PhenomenaCalendar';
 import { Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -90,6 +91,38 @@ function PendingApprovalView() {
 export default function App() {
   const { user, setUser, setUserData } = useStore();
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const applySeo = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'seo', 'config'));
+        if (!snap.exists()) return;
+        const seo = snap.data();
+        if (seo.title) document.title = seo.title;
+        if (seo.description) {
+          let meta = document.querySelector('meta[name="description"]');
+          if (!meta) {
+            meta = document.createElement('meta');
+            meta.setAttribute('name', 'description');
+            document.head.appendChild(meta);
+          }
+          meta.setAttribute('content', seo.description);
+        }
+        if (Array.isArray(seo.keywords) && seo.keywords.length > 0) {
+          let meta = document.querySelector('meta[name="keywords"]');
+          if (!meta) {
+            meta = document.createElement('meta');
+            meta.setAttribute('name', 'keywords');
+            document.head.appendChild(meta);
+          }
+          meta.setAttribute('content', seo.keywords.join(', '));
+        }
+      } catch (err) {
+        console.warn('Failed to apply SEO metadata', err);
+      }
+    };
+    applySeo();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -275,6 +308,9 @@ function AnimatedRoutes() {
             } />
             <Route path="/missions" element={
               <PageTransition><Missions /></PageTransition>
+            } />
+            <Route path="/phenomena" element={
+              <PageTransition><PhenomenaCalendar /></PageTransition>
             } />
             <Route path="/exclusive" element={
               <PageTransition><BlackMarket /></PageTransition>

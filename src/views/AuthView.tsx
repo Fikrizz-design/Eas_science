@@ -280,7 +280,7 @@ function OtpView({ email, uid, onVerified, onCancel }: { email: string; uid: str
 function OnboardingView({ generation, onContinue }: { generation: string; onContinue: () => void }) {
   const [rules, setRules] = useState('');
   const [groupLink, setGroupLink] = useState('');
-  const [admins, setAdmins] = useState<{ name: string; role: string }[]>([]);
+  const [admins, setAdmins] = useState<{ name: string; role: string; profession?: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -293,7 +293,7 @@ function OnboardingView({ generation, onContinue }: { generation: string; onCont
           setGroupLink(generation === 'Gen 2' ? (data.groupLinkGen2 || '') : (data.groupLinkGen1 || ''));
         }
         const usersSnap = await getDocs(query(collection(db, 'users'), where('role', 'in', ['owner', 'admin'])));
-        setAdmins(usersSnap.docs.map(d => ({ name: d.data().name, role: d.data().role })).sort((a, b) => (a.role === 'owner' ? -1 : 1)));
+        setAdmins(usersSnap.docs.map(d => ({ name: d.data().name, role: d.data().role, profession: d.data().profession })).sort((a, b) => (a.role === 'owner' ? -1 : 1)));
       } catch (err) {
         console.warn('Failed to load onboarding info', err);
       } finally {
@@ -330,7 +330,10 @@ function OnboardingView({ generation, onContinue }: { generation: string; onCont
                 <ul className="space-y-2">
                   {admins.map((a, i) => (
                     <li key={i} className="flex items-center justify-between text-sm">
-                      <span className="text-white">{a.name}</span>
+                      <div>
+                        <span className="text-white">{a.name}</span>
+                        {a.profession && <span className="block text-[11px] text-gray-400">{a.profession}</span>}
+                      </div>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border uppercase tracking-widest ${a.role === 'owner' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}`}>{a.role}</span>
                     </li>
                   ))}

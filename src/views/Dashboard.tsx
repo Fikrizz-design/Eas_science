@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Star, Target, Crown, Image as ImageIcon, Palette, Settings, X, Gamepad2, Sun, Map, Globe, CloudLightning, Rocket, Brain, MessageSquare, Book, Shield, ExternalLink, Search, Tv, Briefcase, Users, Clock, Upload } from 'lucide-react';
+import { Trophy, Star, Target, Crown, Image as ImageIcon, Palette, Settings, X, Gamepad2, Sun, Map, Globe, CloudLightning, Rocket, Brain, MessageSquare, Book, Shield, ExternalLink, Search, Tv, Briefcase, Users, Clock, Upload, CalendarDays } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../db/firebase';
 import { uploadLibraryFile } from '../db/supabase';
@@ -16,6 +16,7 @@ const navItems = [
   { path: '/exoplanets', name: 'Exoplanets', icon: Globe, color: 'text-green-400', bg: 'bg-green-900/20' },
   { path: '/spaceweather', name: 'Space Weather', icon: CloudLightning, color: 'text-cyan-400', bg: 'bg-cyan-900/20' },
   { path: '/missions', name: 'Missions', icon: Rocket, color: 'text-pink-400', bg: 'bg-pink-900/20' },
+  { path: '/phenomena', name: 'Phenomena Calendar', icon: CalendarDays, color: 'text-emerald-400', bg: 'bg-emerald-900/20' },
   { path: '/quiz', name: 'Knowledge Quiz', icon: Brain, color: 'text-orange-400', bg: 'bg-orange-900/20' },
   { path: '/forum', name: 'Discussions', icon: MessageSquare, color: 'text-indigo-400', bg: 'bg-indigo-900/20' },
   { path: '/debate', name: 'Debate Room', icon: Target, color: 'text-red-400', bg: 'bg-red-900/20' },
@@ -36,6 +37,53 @@ const FRAMES = [
   { id: 'frame_earth', name: 'Earth Rotation', url: 'https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNGhscHhhM3R6cGFueWF2b2hjd2RyaDR3OXhzMmIzODV2dDlxdzhlaCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/9vE8lC7L1z8Y/giphy.gif', cost: 100 },
   { id: 'frame_einstein', name: 'Einstein Relativity', url: 'https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExamhxazJwbTh3N2V0MzMydW51NWRpNjdsOHBvYjRxa2tndnUzaHhveSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/1xV8jA1zH3g6Opx33k/giphy.gif', cost: 100 }
 ];
+
+function useCountUp(target: number, duration = 900) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    let start: number | null = null;
+    let raf: number;
+    const step = (ts: number) => {
+      if (start === null) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(target * eased));
+      if (progress < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return value;
+}
+
+function MissionClock() {
+  const [time, setTime] = useState('');
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      setTime(now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour12: false }));
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span className="font-mono tabular-nums text-signal-cyan">{time} <span className="text-gray-500 text-[10px]">WIB</span></span>
+  );
+}
+
+function ReadoutChip({ label, value, icon: Icon, color }: { label: string; value: number; icon: any; color: string }) {
+  const count = useCountUp(value);
+  return (
+    <div className="scanline-hover hud-corners bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 min-w-[92px]">
+      <div className={`flex items-center space-x-1.5 mb-1 ${color}`}>
+        <Icon className="w-3.5 h-3.5" />
+        <span className="text-[9px] font-mono uppercase tracking-widest text-gray-400">{label}</span>
+      </div>
+      <p className="text-lg font-mono font-bold text-white tabular-nums">{count.toLocaleString()}</p>
+    </div>
+  );
+}
 
 function SpaceNews() {
   const [news, setNews] = useState<any[]>([]);
@@ -285,7 +333,10 @@ export function Dashboard() {
     }
   };
 
+  const isStaffMember = userData?.role === 'admin' || userData?.role === 'owner';
+
   const professionCooldownDaysLeft = (() => {
+    if (isStaffMember) return 0; // staff can set a custom title anytime
     if (!userData?.professionChangedAt) return 0;
     const last = new Date(userData.professionChangedAt).getTime();
     const daysPassed = (Date.now() - last) / (1000 * 60 * 60 * 24);
@@ -333,6 +384,7 @@ export function Dashboard() {
       </AnimatePresence>
 
       {/* Background Decorator */}
+      <div className="starfield fixed inset-0 z-0 pointer-events-none opacity-40" />
       <AnimatePresence mode="wait">
         {currentBg ? (
           <motion.div 
@@ -358,85 +410,101 @@ export function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* Top Bar / Profile */}
-      <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <header className="flex items-center space-x-6">
-          <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
-            <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileSelected} />
-            <div className="w-20 h-20 rounded-full border-2 border-brand-500 overflow-hidden bg-brand-900 shadow-[0_0_20px_rgba(139,92,246,0.3)] relative z-10">
-              {uploadingAvatar ? (
-                <div className="w-full h-full flex items-center justify-center">
-                  <motion.div className="w-6 h-6 border-2 border-brand-400 border-t-transparent rounded-full" animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} />
-                </div>
-              ) : userData?.avatarUrl ? (
-                <img src={userData.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-3xl font-display font-bold text-brand-300">
-                  {userData?.name?.charAt(0)}
-                </div>
-              )}
-            </div>
-            {/* Frame Display */}
-            {userData?.currentFrame && userData.currentFrame !== 'frame_none' && (
-              <div className="absolute inset-0 z-20 pointer-events-none scale-125">
-                {userData.currentFrame === 'frame_custom' && userData.customFrame ? (
-                   <img src={userData.customFrame} className="w-full h-full object-contain" alt="Custom Frame" />
+      {/* Top Bar / Profile — Mission HUD panel */}
+      <div className="hud-gradient-border hud-panel relative z-10">
+        <div className="hud-panel p-6 md:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <header className="flex items-center space-x-6">
+            <div className="relative group cursor-pointer shrink-0" onClick={() => avatarInputRef.current?.click()}>
+              <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileSelected} />
+              <div className="w-20 h-20 rounded-full border-2 border-brand-500 overflow-hidden bg-brand-900 shadow-[0_0_20px_rgba(139,92,246,0.3)] relative z-10">
+                {uploadingAvatar ? (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <motion.div className="w-6 h-6 border-2 border-brand-400 border-t-transparent rounded-full" animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} />
+                  </div>
+                ) : userData?.avatarUrl ? (
+                  <img src={userData.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
-                   <img src={FRAMES.find(f => f.id === userData.currentFrame)?.url} className="w-full h-full object-contain mix-blend-screen" alt="Frame" />
+                  <div className="w-full h-full flex items-center justify-center text-3xl font-display font-bold text-brand-300">
+                    {userData?.name?.charAt(0)}
+                  </div>
                 )}
               </div>
-            )}
-            <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-30">
-              <ImageIcon className="w-6 h-6 text-white" />
+              {/* Frame Display */}
+              {userData?.currentFrame && userData.currentFrame !== 'frame_none' && (
+                <div className="absolute inset-0 z-20 pointer-events-none scale-125">
+                  {userData.currentFrame === 'frame_custom' && userData.customFrame ? (
+                     <img src={userData.customFrame} className="w-full h-full object-contain" alt="Custom Frame" />
+                  ) : (
+                     <img src={FRAMES.find(f => f.id === userData.currentFrame)?.url} className="w-full h-full object-contain mix-blend-screen" alt="Frame" />
+                  )}
+                </div>
+              )}
+              <div className="absolute -inset-1 rounded-full border border-signal-cyan/0 group-hover:border-signal-cyan/60 transition-colors z-20 pointer-events-none" />
+              <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-30">
+                <ImageIcon className="w-6 h-6 text-white" />
+              </div>
             </div>
-          </div>
-          <div>
-            <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="inline-flex items-center space-x-2 bg-brand-500/10 text-brand-300 border border-brand-500/20 px-3 py-1 rounded-full text-xs font-mono uppercase tracking-widest mb-4 relative overflow-hidden"
+            <div>
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="inline-flex items-center space-x-3 mb-3 font-mono text-[11px] uppercase tracking-widest"
+              >
+                <span className="inline-flex items-center space-x-2 text-signal-cyan">
+                  <span className="w-1.5 h-1.5 rounded-full bg-signal-cyan pulse-dot" />
+                  <span>Online</span>
+                </span>
+                <span className="text-white/20">/</span>
+                <span className="text-brand-300">{userData?.role || 'member'}</span>
+                <span className="text-white/20">/</span>
+                <MissionClock />
+              </motion.div>
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-4xl md:text-5xl font-display font-bold tracking-tight text-white"
+              >
+                Welcome, <span className="gradient-text-shimmer">{userData?.name}</span>
+              </motion.h1>
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="text-gray-400 mt-2 text-lg"
+              >
+                Command Center Overview
+              </motion.p>
+            </div>
+          </header>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: 'Funding', value: userData?.coins || 0, icon: Star, color: 'text-brand-300' },
+                { label: 'Diamonds', value: userData?.diamonds || 0, icon: Target, color: 'text-pink-400' },
+                { label: 'EXP', value: userData?.exp || 0, icon: Crown, color: 'text-yellow-400' },
+              ].map((stat) => (
+                <ReadoutChip key={stat.label} {...stat} />
+              ))}
+            </div>
+            <motion.button
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowSettings(true)}
+              className="scanline-hover flex items-center justify-center space-x-3 bg-white/5 hover:bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 hover:border-signal-cyan/40 transition-all group shadow-xl"
             >
-              <motion.div 
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                animate={{ x: ['-100%', '200%'] }}
-                transition={{ duration: 2.5, repeat: Infinity, ease: 'linear' }}
-              />
-              <span className="w-2 h-2 rounded-full bg-brand-400 animate-pulse relative z-10" />
-              <span className="relative z-10">System Online</span>
-            </motion.div>
-            <motion.h1 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-4xl md:text-5xl font-display font-bold tracking-tight text-white"
-            >
-              Welcome, <motion.span 
-                className="text-transparent bg-clip-text bg-gradient-to-r from-brand-300 to-white"
-              >{userData?.name}</motion.span>
-            </motion.h1>
-            <motion.p 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="text-gray-400 mt-2 text-lg"
-            >
-              Command Center Overview
-            </motion.p>
+              <div className="p-2 bg-brand-500/20 rounded-lg group-hover:bg-brand-500/30 transition-colors">
+                <Settings className="w-5 h-5 text-brand-300" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold text-white">Profile Settings</p>
+                <p className="text-xs text-gray-400">Stats & Decorations</p>
+              </div>
+            </motion.button>
           </div>
-        </header>
-        <motion.button 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          onClick={() => setShowSettings(true)}
-          className="flex items-center space-x-3 bg-white/5 hover:bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 transition-all group shadow-xl"
-        >
-          <div className="p-2 bg-brand-500/20 rounded-lg group-hover:bg-brand-500/30 transition-colors">
-            <Settings className="w-5 h-5 text-brand-300" />
-          </div>
-          <div className="text-left">
-            <p className="text-sm font-bold text-white">Profile Settings</p>
-            <p className="text-xs text-gray-400">Stats & Decorations</p>
-          </div>
-        </motion.button>
+        </div>
       </div>
 
       <SpaceNews />
@@ -445,7 +513,7 @@ export function Dashboard() {
       <div className="relative z-10">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <h2 className="text-xl font-display font-bold text-white flex items-center">
-            <Globe className="w-6 h-6 mr-3 text-brand-400" />
+            <span className="text-signal-cyan font-mono text-sm mr-3">//</span>
             Exploration Modules
           </h2>
           <div className="relative w-full sm:w-64">
@@ -457,7 +525,7 @@ export function Dashboard() {
               placeholder="Search modules..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500 focus:bg-white/10 transition-all"
+              className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-signal-cyan/60 focus:bg-white/10 transition-all"
             />
           </div>
         </div>
@@ -471,7 +539,7 @@ export function Dashboard() {
               onClick={() => navigate(item.path)}
               whileHover={{ scale: 1.03, y: -5 }}
               whileTap={{ scale: 0.97 }}
-              className={`cursor-pointer ${item.bg} backdrop-blur-xl p-6 rounded-[2rem] border border-white/10 hover:border-white/30 transition-all flex flex-col justify-between group h-48 shadow-2xl relative overflow-hidden`}
+              className={`hud-panel hud-corners scanline-hover cursor-pointer ${item.bg} backdrop-blur-xl p-6 border border-white/10 hover:border-white/30 transition-all flex flex-col justify-between group h-48 shadow-2xl relative overflow-hidden`}
             >
               <div className="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity transform duration-500 pointer-events-none">
                 <item.icon className="w-32 h-32" />
@@ -481,6 +549,7 @@ export function Dashboard() {
                 <item.icon className={`w-8 h-8 ${item.color}`} />
               </div>
               <div className="relative z-10">
+                <span className="font-mono text-[9px] uppercase tracking-widest text-gray-500 block mb-1">Module {String(idx + 1).padStart(2, '0')}</span>
                 <span className="font-bold text-lg text-white transition-colors">{item.name}</span>
                 <div className="w-8 h-1 bg-white/20 mt-3 rounded-full overflow-hidden">
                   <div className={`h-full w-0 group-hover:w-full transition-all duration-500 ${item.color.replace('text-', 'bg-')}`} />
@@ -575,7 +644,7 @@ export function Dashboard() {
                           )}
                         </div>
                         <button
-                          onClick={() => { setNewProfession(userData?.profession || PROFESSIONS[0]); setShowProfessionEdit(true); }}
+                          onClick={() => { setNewProfession(userData?.profession || (isStaffMember ? '' : PROFESSIONS[0])); setShowProfessionEdit(true); }}
                           disabled={professionCooldownDaysLeft > 0}
                           className="bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-xl transition-colors shrink-0"
                         >
@@ -584,20 +653,32 @@ export function Dashboard() {
                       </div>
                     ) : (
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                        <select
-                          value={newProfession}
-                          onChange={(e) => setNewProfession(e.target.value)}
-                          className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500 appearance-none"
-                        >
-                          {PROFESSIONS.map(p => <option key={p} value={p} className="bg-brand-900">{p}</option>)}
-                        </select>
+                        {isStaffMember ? (
+                          <input
+                            type="text"
+                            placeholder="cth. Kepala Divisi Riset, Moderator Komunitas"
+                            value={newProfession}
+                            onChange={(e) => setNewProfession(e.target.value)}
+                            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500"
+                          />
+                        ) : (
+                          <select
+                            value={newProfession}
+                            onChange={(e) => setNewProfession(e.target.value)}
+                            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500 appearance-none"
+                          >
+                            {PROFESSIONS.map(p => <option key={p} value={p} className="bg-brand-900">{p}</option>)}
+                          </select>
+                        )}
                         <div className="flex gap-2">
                           <button onClick={changeProfession} className="flex-1 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold uppercase tracking-widest px-4 py-3 rounded-xl transition-colors">Simpan</button>
                           <button onClick={() => setShowProfessionEdit(false)} className="bg-white/5 hover:bg-white/10 text-white text-xs font-bold uppercase tracking-widest px-4 py-3 rounded-xl transition-colors">Batal</button>
                         </div>
                       </div>
                     )}
-                    <p className="text-[10px] text-gray-500 mt-3">Profesi hanya bisa diganti 1x setiap 30 hari.</p>
+                    <p className="text-[10px] text-gray-500 mt-3">
+                      {isStaffMember ? 'Sebagai admin/owner, kamu bisa mengatur judul/profesi custom kapan saja — ditampilkan di Struktur Admin.' : 'Profesi hanya bisa diganti 1x setiap 30 hari.'}
+                    </p>
                   </div>
                 </div>
 
