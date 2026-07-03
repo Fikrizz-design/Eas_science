@@ -6,7 +6,10 @@ on:
       zip_file:
         description: 'Nama file zip yang mau di-extract'
         required: true
-        default: 'Eas_science-main.zip'
+
+permissions:
+  contents: write
+
 jobs:
   extract:
     runs-on: ubuntu-latest
@@ -15,9 +18,9 @@ jobs:
 
       - name: Extract zip
         run: |
-          unzip -o "${{ github.event.inputs.zip_file }}" -d temp_extract
-          # cek isi folder hasil extract, lalu pindahkan ke root
-          
+          unzip -o "${{ github.event.inputs.zip_file }}" -d . || true
+          rm -f "${{ github.event.inputs.zip_file }}"
+
       - name: Commit changes
         run: |
           git config user.name "github-actions"
