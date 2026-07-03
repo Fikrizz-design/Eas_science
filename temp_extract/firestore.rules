@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwnerOf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isStaff() {
+      return isVerified() && myRole() in ['admin', 'owner', 'developer'];
+    }
+
+    function isOwnerRole() {
+      // "developer" is the top tier (site maintainer) and inherits every
+      // owner-level permission, plus its own monitoring panel below.
+      return isVerified() && myRole() in ['owner', 'developer'];
+    }
+
+    function isDeveloper() {
+      return isVerified() && myRole() == 'developer';
+    }
+
+    // ---- users: name, role, coins (funding), diamonds, exp, etc ----
+    match /users/{uid} {
+      allow read: if isVerified();
+      // A user may create/update their own profile, but may NOT self-elevate
+      // role or grant themselves funding/diamonds/exp — only staff can change those.
+      allow create: if isOwnerOf(uid)
+                    && request.resource.data.role == 'member'
+                    && request.resource.data.coins == 0
+                    && request.resource.data.diamonds == 0
+                    && request.resource.data.exp == 0;
+      allow update: if isOwnerRole()
+                    || (isStaff() && request.resource.data.role == resource.data.role) // admins moderate but can't change roles
+                    || (isOwnerOf(uid)
+                        && request.resource.data.role == resource.data.role
+                        && request.resource.data.diamonds <= resource.data.diamonds + 0
+                        // allow spending diamonds (decrease) and normal profile edits,
+                        // but never let a user hand themselves free funding/exp/diamonds:
+                        && request.resource.data.coins <= resource.data.coins
+                        && request.resource.data.exp == resource.data.exp);
+      allow delete: if isOwnerRole();
+    }
+
+    // ---- library: journals/photos/audio metadata (files live in Supabase Storage) ----
+    match /library/{itemId} {
+      allow read: if isVerified();
+      allow create: if isVerified()
+                    && request.resource.data.authorId == request.auth.uid
+                    && request.resource.data.status == 'pending';
+      allow update: if isStaff()
+                    || (isOwnerOf(resource.data.authorId) && resource.data.status == 'pending');
+      allow delete: if isStaff() || isOwnerOf(resource.data.authorId);
+    }
+
+    // ---- debates: theses + nested replies ----
+    match /debates/{debateId} {
+      allow read: if isVerified();
+      allow create: if isVerified() && request.resource.data.authorId == request.auth.uid;
+      allow update: if isVerified(); // replies array append is validated by the moderation API before writing
+      allow delete: if isStaff() || isOwnerOf(resource.data.authorId);
+    }
+
+    // ---- posts: forum / general chat ----
+    match /posts/{postId} {
+      allow read: if isVerified();
+      allow create: if isVerified() && request.resource.data.authorId == request.auth.uid;
+      allow update: if isStaff() || isOwnerOf(resource.data.authorId);
+      allow delete: if isStaff() || isOwnerOf(resource.data.authorId);
+    }
+
+    // ---- arcade puzzles ----
+    match /puzzles/{puzzleId} {
+      allow read: if isVerified();
+      allow write: if isStaff();
+    }
+
+    // ---- astronomy phenomena calendar (admin-curated + NASA-sourced) ----
+    match /phenomena/{eventId} {
+      allow read: if isVerified();
+      allow write: if isStaff();
+    }
+
+    // ---- auto-generated SEO metadata (written server-side only) ----
+    match /seo/{docId} {
+      allow read: if true; // needed for public meta tags before login
+      allow write: if false;
+    }
+
+    // ---- client/server error reports, for the Developer Panel ----
+    match /errorLogs/{logId} {
+      allow create: if isVerified();
+      allow read, delete: if isDeveloper();
+      allow update: if false;
+    }
+
+    // ---- global app settings (registration open/closed, group links, etc) ----
+    match /settings/{docId} {
+      allow read: if true; // needed on the auth screen before login
+      allow write: if isStaff();
+    }
+
+    // ---- one-time passcodes: server-only (Admin SDK bypasses rules), never client-accessible ----
+    match /otps/{uid} {
+      allow read, write: if false;
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
