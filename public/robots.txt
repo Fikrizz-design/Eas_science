@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://astronomy-science-portal.web.id/sitemap.xml
