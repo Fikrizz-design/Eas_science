@@ -48,9 +48,10 @@ service cloud.firestore {
                         && request.resource.data.role == resource.data.role
                         && request.resource.data.diamonds <= resource.data.diamonds + 0
                         // allow spending diamonds (decrease) and normal profile edits,
-                        // but never let a user hand themselves free funding/exp/diamonds:
+                        // but never let a user hand themselves free funding/exp/diamonds/VIP:
                         && request.resource.data.coins <= resource.data.coins
-                        && request.resource.data.exp == resource.data.exp);
+                        && request.resource.data.exp == resource.data.exp
+                        && request.resource.data.isVIP == resource.data.isVIP);
       allow delete: if isOwnerRole();
     }
 
@@ -88,8 +89,10 @@ service cloud.firestore {
     }
 
     // ---- astronomy phenomena calendar (admin-curated + NASA-sourced) ----
+    // Public read on purpose — this is the one page shown to logged-out
+    // visitors (and search engines) so there's real, unique content to index.
     match /phenomena/{eventId} {
-      allow read: if isVerified();
+      allow read: if true;
       allow write: if isStaff();
     }
 

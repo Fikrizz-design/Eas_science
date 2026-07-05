@@ -44,7 +44,7 @@ export default async function handler(req: any, res: any) {
         {
           role: 'user',
           content:
-            'Buat metadata SEO baru untuk halaman utama E.A.S dalam Bahasa Indonesia yang menarik, relevan, dan bervariasi dari waktu ke waktu (jangan generik). Platform ini punya: kuis astronomi harian, ruang debat sains, star map, tracker cuaca luar angkasa, kalender fenomena langit, dan perpustakaan riset komunitas pelajar. Balas HANYA dengan objek JSON persis seperti ini: {"title": "string maks 60 karakter", "description": "string maks 155 karakter", "keywords": ["kata kunci", "..."]}',
+            'Buat metadata SEO baru untuk halaman utama E.A.S dalam Bahasa Indonesia. WAJIB menyertakan frasa "Komunitas Astronomi Indonesia" secara natural di title ATAU description (ini istilah pencarian utama yang ingin dituju), tetap menarik dan tidak generik/berulang dari waktu ke waktu. Platform ini punya: kuis astronomi harian, ruang debat sains, star map, tracker cuaca luar angkasa, kalender fenomena langit, dan perpustakaan riset komunitas pelajar. Balas HANYA dengan objek JSON persis seperti ini: {"title": "string maks 60 karakter", "description": "string maks 155 karakter", "keywords": ["komunitas astronomi indonesia", "kata kunci lain", "..."]}',
         },
       ],
       { json: true, temperature: 1.0, maxTokens: 600 }
@@ -54,9 +54,9 @@ export default async function handler(req: any, res: any) {
     const seo = JSON.parse(cleaned);
 
     const payload = {
-      title: seo.title || 'E.A.S — Education Astronomy Science',
-      description: seo.description || 'Platform edukasi astronomi untuk pelajar Indonesia.',
-      keywords: Array.isArray(seo.keywords) ? seo.keywords : [],
+      title: seo.title || 'E.A.S — Komunitas Astronomi Indonesia',
+      description: seo.description || 'Komunitas Astronomi Indonesia untuk pelajar — kuis harian, debat sains, dan kalender fenomena langit.',
+      keywords: Array.isArray(seo.keywords) ? seo.keywords : ['komunitas astronomi indonesia'],
       generatedAt: new Date().toISOString(),
     };
 

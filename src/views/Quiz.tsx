@@ -57,7 +57,8 @@ export function Quiz() {
       setCorrectCount(c => c + 1);
       if (user && userData) {
         try {
-          await updateDoc(doc(db, 'users', user.uid), { exp: (userData.exp || 0) + EXP_PER_CORRECT });
+          const earnedExp = userData.isVIP ? EXP_PER_CORRECT * 2 : EXP_PER_CORRECT;
+          await updateDoc(doc(db, 'users', user.uid), { exp: (userData.exp || 0) + earnedExp });
         } catch (err: any) {
           console.error(err);
         }

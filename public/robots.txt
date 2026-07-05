@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://astronomy-science-portal.web.id/sitemap.xml
+Sitemap: https://education-astronomy-science-portal.web.id/sitemap.xml

@@ -171,7 +171,70 @@ serverless functions together, using the same env vars from `.env`/`vercel env p
 - Vercel Cron Jobs require at least the Hobby plan; check Vercel's current limits if the
   schedule in `vercel.json` doesn't trigger as expected.
 
+## Public pages for SEO (new)
+
+Previously, logged-out visitors (including Google's crawler) only ever saw the
+registration/login screen — there was no real content for search engines to index,
+which is the main reason the site wasn't showing up for searches like "Komunitas
+Astronomi Indonesia" no matter how correct the sitemap/robots.txt setup was.
+
+Now, without logging in, visitors can reach:
+- **`/`** — a real landing page (`src/views/LandingPage.tsx`) explaining what E.A.S is,
+  its features, and a live preview of upcoming phenomena — built specifically to have
+  substantive, keyword-relevant content for Google to index.
+- **`/phenomena`** — the Phenomena Calendar is now public read (Firestore rule changed
+  from `isVerified()` to `true` for the `phenomena` collection) so it's real, frequently
+  updated content search engines can crawl.
+- **`/auth`** — registration/login, now a specific route instead of the only thing
+  logged-out visitors could ever see.
+
+Also added:
+- `public/robots.txt` and `public/sitemap.xml` — these didn't exist before, so any
+  sitemap URL submitted to Search Console was returning nothing.
+- Real static `<title>`/meta description/Open Graph tags in `index.html` (previously
+  empty/generic), plus the Groq-generated SEO content in `api/generate-seo.ts` is now
+  explicitly prompted to include the phrase "Komunitas Astronomi Indonesia".
+
+**Still true regardless of these fixes:** even with everything technically correct,
+Google indexing new/changed pages typically takes days to a few weeks, and ranking for
+a specific phrase depends on more than on-page SEO (domain age, backlinks, content
+depth over time). These changes give the site something real to index — they don't
+guarantee an immediate #1 ranking.
+
+### Re-check in Search Console after deploying
+- Resubmit `https://education-astronomy-science-portal.web.id/sitemap.xml` under
+  Sitemaps
+- Use "URL Inspection" on `/` and `/phenomena`, click "Request Indexing" on each
+
+## VIP tier & Black Market (new)
+
+Added a **VIP** status — separate from the admin/owner/developer role hierarchy, this is
+a member-facing perk tier (like a cosmetic subscription) that unlocks:
+
+- **Custom profile banner** — upload an image shown behind the profile header (Profile
+  Settings → Custom Profile Banner). Gated so only VIP/Owner can actually make it render,
+  even if someone tried to set the field directly — the display check itself requires
+  `isVIP`, and `isVIP` can only be changed by staff or the paid-purchase endpoint (see
+  below), never by the user directly, so this can't be self-granted via devtools.
+- **Nameplate color** — pick an accent color for your name shown in Forum posts and
+  Debate Room.
+- **Black Market access** (`/exclusive`) — now a real hub linking to the perks above,
+  plus 2x EXP on the Daily Quiz while VIP is active. (Previously this page had three
+  buttons that didn't do anything — "Infinite Funding withdraw 1M" also directly
+  undermined the point of the earned-currency system, so it's gone.)
+
+**How to get VIP:**
+- Members can buy it with 750,000 Diamonds via Profile Settings → VIP Membership. This
+  goes through `/api/purchase-vip`, which validates the balance and deducts diamonds
+  server-side in a Firestore transaction — not a direct client write, so it can't be
+  spoofed.
+- Staff (admin/owner/developer) can also grant or revoke VIP manually for any member
+  from AdminPanel's Explorer Manifest ("Grant VIP" / "Revoke VIP" button) — useful for
+  rewarding active members without requiring a purchase.
+
 ## Developer role & Developer Panel
+
+
 
 There's now a role tier above `owner`: **`developer`**. It's meant for you (the person
 who actually built and maintains the site) to monitor the whole app without needing

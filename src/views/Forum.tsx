@@ -46,6 +46,7 @@ export function Forum() {
         category,
         authorId: user?.uid,
         authorName: userData?.name,
+        authorNameColor: userData?.nameColor || null,
       };
       const ref = await addDoc(collection(db, 'posts'), {
         ...postDoc,
@@ -112,7 +113,7 @@ export function Forum() {
                   </button>
                 )}
                 <div className="flex justify-between items-start mb-2">
-                  <span className="font-medium text-brand-400">{post.authorName}</span>
+                  <span className="font-medium text-brand-400" style={post.authorNameColor ? { color: post.authorNameColor } : undefined}>{post.authorName}</span>
                   <span className="text-xs text-gray-500">
                     {post.createdAt?.toDate().toLocaleDateString() || 'Just now'}
                   </span>

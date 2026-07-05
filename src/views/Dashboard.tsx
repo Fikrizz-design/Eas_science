@@ -3,9 +3,9 @@ import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Star, Target, Crown, Image as ImageIcon, Palette, Settings, X, Gamepad2, Sun, Map, Globe, CloudLightning, Rocket, Brain, MessageSquare, Book, Shield, ExternalLink, Search, Tv, Briefcase, Users, Clock, Upload, CalendarDays, Terminal } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../db/firebase';
+import { db, auth } from '../db/firebase';
 import { uploadLibraryFile } from '../db/supabase';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 
 const PROFESSIONS = ['Pelajar SD', 'Pelajar SMP', 'Pelajar SMA', 'Mahasiswa', 'Guru/Dosen', 'Pekerja', 'Lainnya'];
 
@@ -149,8 +149,16 @@ function SpaceNews() {
 export function Dashboard() {
   const { userData, user } = useStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showSettings, setShowSettings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if ((location.state as any)?.openSettings) {
+      setShowSettings(true);
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
   
   const [tiktokUrl, setTiktokUrl] = useState('');
   const [showTiktok, setShowTiktok] = useState(false);
@@ -160,6 +168,11 @@ export function Dashboard() {
   const [uploadingFrame, setUploadingFrame] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const frameInputRef = useRef<HTMLInputElement>(null);
+
+  const [purchasingVip, setPurchasingVip] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const NAME_COLORS = ['#a78bfa', '#22d3ee', '#f472b6', '#fbbf24', '#4ade80', '#f87171'];
 
   const [groupLinkGen1, setGroupLinkGen1] = useState('');
   const [groupLinkGen2, setGroupLinkGen2] = useState('');
@@ -188,7 +201,7 @@ export function Dashboard() {
   const isAdmin = userData?.role === 'admin';
   const isOwner = userData?.role === 'owner' || userData?.role === 'developer';
   const isDeveloper = userData?.role === 'developer';
-  const hasExclusive = isOwner || userData?.currentFrame === 'frame_custom';
+  const hasExclusive = isOwner || userData?.isVIP || userData?.currentFrame === 'frame_custom';
   
   const baseNavItems = [...navItems];
   if (hasExclusive) {
@@ -340,6 +353,46 @@ export function Dashboard() {
 
   const isStaffMember = userData?.role === 'admin' || userData?.role === 'owner' || userData?.role === 'developer';
 
+  const purchaseVip = async () => {
+    if (!auth.currentUser) return;
+    setPurchasingVip(true);
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const res = await fetch('/api/purchase-vip', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal membeli VIP.');
+      alert('Selamat! Kamu sekarang VIP. 🎉');
+    } catch (e: any) {
+      alert(e.message || 'Gagal membeli VIP.');
+    } finally {
+      setPurchasingVip(false);
+    }
+  };
+
+  const handleBannerFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploadingBanner(true);
+    try {
+      const url = await uploadLibraryFile(file, 'banners');
+      await updateDoc(doc(db, 'users', user.uid), { bannerUrl: url });
+    } catch (e) {
+      alert('Failed to upload banner.');
+    } finally {
+      setUploadingBanner(false);
+      if (bannerInputRef.current) bannerInputRef.current.value = '';
+    }
+  };
+
+  const setNameColor = async (color: string) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { nameColor: color });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const professionCooldownDaysLeft = (() => {
     if (isStaffMember) return 0; // staff can set a custom title anytime
     if (!userData?.professionChangedAt) return 0;
@@ -417,8 +470,14 @@ export function Dashboard() {
 
       {/* Top Bar / Profile — Mission HUD panel */}
       <div className="hud-gradient-border hud-panel relative z-10">
-        <div className="hud-panel p-6 md:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <header className="flex items-center space-x-6">
+        <div className="hud-panel relative overflow-hidden p-6 md:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          {(userData?.isVIP || isOwner) && userData?.bannerUrl && (
+            <>
+              <img src={userData.bannerUrl} alt="Profile banner" className="absolute inset-0 w-full h-full object-cover opacity-30" />
+              <div className="absolute inset-0 bg-gradient-to-r from-brand-950/90 via-brand-950/60 to-brand-950/90" />
+            </>
+          )}
+          <header className="relative flex items-center space-x-6">
             <div className="relative group cursor-pointer shrink-0" onClick={() => avatarInputRef.current?.click()}>
               <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileSelected} />
               <div className="w-20 h-20 rounded-full border-2 border-brand-500 overflow-hidden bg-brand-900 shadow-[0_0_20px_rgba(139,92,246,0.3)] relative z-10">
@@ -708,6 +767,74 @@ export function Dashboard() {
                     )}
                   </div>
                 </div>
+
+                {/* VIP Membership */}
+                <div>
+                  <h3 className="font-bold text-lg mb-4 uppercase tracking-widest text-yellow-400 flex items-center"><Crown className="w-5 h-5 mr-2" /> VIP Membership</h3>
+                  <div className="bg-gradient-to-br from-yellow-900/20 to-brand-900/40 p-5 rounded-2xl border border-yellow-500/20">
+                    {userData?.isVIP ? (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-white font-bold flex items-center"><Crown className="w-4 h-4 text-yellow-400 mr-2" /> VIP Aktif</p>
+                          <p className="text-xs text-gray-400 mt-1">Kamu punya akses Black Market, custom banner, dan nameplate color.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <div>
+                          <p className="text-white font-bold">Belum VIP</p>
+                          <p className="text-xs text-gray-400 mt-1">Buka Black Market, custom banner profile, & nameplate color — {(750000).toLocaleString('id-ID')} Diamonds.</p>
+                        </div>
+                        <button
+                          onClick={purchaseVip}
+                          disabled={purchasingVip || (userData?.diamonds || 0) < 750000}
+                          className="bg-yellow-500 hover:bg-yellow-400 disabled:opacity-40 text-black text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-xl transition-colors shrink-0"
+                        >
+                          {purchasingVip ? 'Processing...' : 'Beli VIP'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {(userData?.isVIP || isOwner) && (
+                  <>
+                    {/* Custom Banner */}
+                    <div>
+                      <h3 className="font-bold text-lg mb-4 uppercase tracking-widest text-brand-300 flex items-center"><ImageIcon className="w-5 h-5 mr-2" /> Custom Profile Banner</h3>
+                      <div className="bg-brand-900/40 p-5 rounded-2xl border border-white/10">
+                        {userData?.bannerUrl && (
+                          <img src={userData.bannerUrl} alt="Current banner" className="w-full h-24 object-cover rounded-xl mb-4" />
+                        )}
+                        <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={handleBannerFileSelected} />
+                        <button
+                          onClick={() => bannerInputRef.current?.click()}
+                          disabled={uploadingBanner}
+                          className="bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-xl transition-colors flex items-center space-x-2"
+                        >
+                          <Upload className="w-4 h-4" />
+                          <span>{uploadingBanner ? 'Uploading...' : userData?.bannerUrl ? 'Ganti Banner' : 'Upload Banner'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Nameplate Color */}
+                    <div>
+                      <h3 className="font-bold text-lg mb-4 uppercase tracking-widest text-brand-300">Nameplate Color</h3>
+                      <div className="bg-brand-900/40 p-5 rounded-2xl border border-white/10 flex items-center gap-3 flex-wrap">
+                        {NAME_COLORS.map(c => (
+                          <button
+                            key={c}
+                            onClick={() => setNameColor(c)}
+                            className={`w-10 h-10 rounded-full border-2 transition-transform hover:scale-110 ${userData?.nameColor === c ? 'border-white scale-110' : 'border-white/20'}`}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                        <span className="text-xs text-gray-500 ml-2">Warna namamu di Forum & Debate Room</span>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Avatar Frames */}
                 <div>

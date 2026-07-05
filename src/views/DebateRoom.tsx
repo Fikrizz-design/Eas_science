@@ -65,6 +65,7 @@ export function DebateRoom() {
         title, topic, source, logic,
         authorId: user?.uid,
         authorName: userData?.name,
+        authorNameColor: userData?.nameColor || null,
         status: 'active',
         replies: [] as any[],
       };
@@ -100,6 +101,7 @@ export function DebateRoom() {
       id: Date.now().toString(),
       authorId: user?.uid,
       authorName: userData?.name,
+      authorNameColor: userData?.nameColor || null,
       type: replyType,
       content: replyContent,
       facts: replyFacts,
@@ -132,7 +134,7 @@ export function DebateRoom() {
               <div><span className="text-gray-500 text-xs uppercase block">Thesis Logic</span><p className="text-gray-200">{activeDebate.logic}</p></div>
               <div><span className="text-gray-500 text-xs uppercase block">Source / Journal</span><a href={activeDebate.source} target="_blank" className="text-brand-400 hover:underline text-sm">{activeDebate.source}</a></div>
             </div>
-            <p className="text-xs text-gray-500 mt-4">Proposed by {activeDebate.authorName}</p>
+            <p className="text-xs text-gray-500 mt-4">Proposed by <span style={activeDebate.authorNameColor ? { color: activeDebate.authorNameColor } : undefined}>{activeDebate.authorName}</span></p>
           </div>
 
           <div className="space-y-4 mb-6">
@@ -143,7 +145,7 @@ export function DebateRoom() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center space-x-2">
                     {r.type === 'agree' ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : <XCircle className="w-4 h-4 text-red-400" />}
-                    <span className="font-bold text-white text-sm">{r.authorName}</span>
+                    <span className="font-bold text-white text-sm" style={r.authorNameColor ? { color: r.authorNameColor } : undefined}>{r.authorName}</span>
                   </div>
                   {r.type === 'rebut' && (
                     <span className="text-xs flex items-center bg-black/40 px-2 py-1 rounded text-orange-300">
@@ -246,7 +248,7 @@ export function DebateRoom() {
             <h3 className="font-bold text-lg mb-2 group-hover:text-red-400 transition-colors">{debate.title}</h3>
             <p className="text-sm text-gray-400 line-clamp-2 mb-4">{debate.logic}</p>
             <div className="flex items-center justify-between text-xs text-gray-500">
-              <span>By {debate.authorName}</span>
+              <span>By <span style={debate.authorNameColor ? { color: debate.authorNameColor } : undefined}>{debate.authorName}</span></span>
               <span className="flex items-center"><Target className="w-3 h-3 mr-1" /> {debate.replies?.length || 0} Responses</span>
             </div>
           </div>

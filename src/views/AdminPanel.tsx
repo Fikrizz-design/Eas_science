@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, getDoc, setDoc, orderBy } from 'firebase/firestore';
 import { db, auth } from '../db/firebase';
-import { Shield, UserX, UserCheck, CheckCircle, ImagePlus, Trash2, Settings, ShieldPlus, ShieldMinus, ScrollText, CalendarDays, Sparkles, RefreshCw } from 'lucide-react';
+import { Shield, UserX, UserCheck, CheckCircle, ImagePlus, Trash2, Settings, ShieldPlus, ShieldMinus, ScrollText, CalendarDays, Sparkles, RefreshCw, Crown } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 export function AdminPanel() {
@@ -233,6 +233,15 @@ export function AdminPanel() {
     } catch (err) {
       console.error(err);
       alert('Failed to change role. Permissions might be denied.');
+    }
+  };
+
+  const toggleVip = async (userId: string, currentlyVIP: boolean) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), currentlyVIP ? { isVIP: false } : { isVIP: true, vipSince: new Date().toISOString() });
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update VIP status.');
     }
   };
 
@@ -484,6 +493,11 @@ export function AdminPanel() {
                       {u.role && u.role !== 'member' && (
                         <span className={`text-[10px] px-2 py-0.5 rounded-full border uppercase tracking-widest ${u.role === 'developer' ? 'bg-signal-cyan/20 text-signal-cyan border-signal-cyan/30' : u.role === 'owner' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}`}>{u.role}</span>
                       )}
+                      {u.isVIP && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 uppercase tracking-widest flex items-center gap-1">
+                          <Crown className="w-2.5 h-2.5" /> VIP
+                        </span>
+                      )}
                     </h3>
                     <p className="text-xs text-gray-400 mt-1">{u.email}</p>
                     {u.profession && <p className="text-xs text-brand-400 mt-1">{u.profession}</p>}
@@ -503,6 +517,15 @@ export function AdminPanel() {
                     )}
                   </div>
                 )}
+
+                <div className="mb-4">
+                  <button
+                    onClick={() => toggleVip(u.id, !!u.isVIP)}
+                    className={`w-full flex items-center justify-center space-x-2 text-xs font-bold uppercase tracking-widest py-2 rounded-xl transition-colors border ${u.isVIP ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20' : 'bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 border-yellow-500/20'}`}
+                  >
+                    <Crown className="w-4 h-4" /> <span>{u.isVIP ? 'Revoke VIP' : 'Grant VIP'}</span>
+                  </button>
+                </div>
                 
                 <div className="flex flex-wrap gap-2 mb-4">
                    {u.isBlacklisted && <p className="text-[10px] text-red-400 bg-red-500/10 px-2 py-1 rounded">Reason: {u.blacklistReason}</p>}

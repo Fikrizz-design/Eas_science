@@ -25,6 +25,7 @@ import { DebateRoom } from './views/DebateRoom';
 import { BlackMarket } from './views/BlackMarket';
 import { PhenomenaCalendar } from './views/PhenomenaCalendar';
 import { DeveloperPanel } from './views/DeveloperPanel';
+import { LandingPage } from './views/LandingPage';
 import { Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -276,7 +277,11 @@ export default function App() {
           )}
         </div>
       ) : (
-        <AuthView />
+        <Routes>
+          <Route path="/auth" element={<AuthView />} />
+          <Route path="/phenomena" element={<div className="min-h-screen bg-brand-950 px-6"><PhenomenaCalendar /></div>} />
+          <Route path="*" element={<LandingPage />} />
+        </Routes>
       )}
     </BrowserRouter>
   );
